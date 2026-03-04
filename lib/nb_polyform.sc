@@ -1,4 +1,4 @@
-// polyform lite - nb editon v0.1 @sonoCircuit
+// polyform lite - nb editon v0.2 @sonoCircuit
 
 NB_PolyForm {
 
@@ -8,20 +8,24 @@ NB_PolyForm {
 		var numVoices = 6;
 
 		synthParams = Dictionary.newFrom([
+			\lastFreq, 110,
+			\pitchBend, 1,
+			\glide, 0,
 			\amp, 0.8,
-			\spread, 0,
+			\panDrift, 0,
 			\mix, -0.6,
-			\saw_tune, 0,
-			\pulse_tune, 0,
-			\saw_shape, 1,
-			\pulse_width, 0.5,
-			\cutoff_lpf, 1200,
-			\res_lpf, 0.2,
-			\env_lpf_depth, 0.24,
-			\moddepth, 0,
-			\cut_lpf_mod, 0,
-			\saw_shape_mod, 0,
-			\pulse_width_mod, 0,
+			\sawTune, 0,
+			\pulseTune, 0,
+			\sawShape, 1,
+			\pulseWidth, 0.5,
+			\cutoffLpf, 1200,
+			\rezLpf, 0.2,
+			\envDepthLpf, 0.24,
+			\modDepth, 0,
+			\mixMod, 0,
+			\cutLpfMod, 0,
+			\sawShapeMod, 0,
+			\pulseWidthMod, 0,
 			\attack, 0.01,
 			\decay, 0.6,
 			\sustain, 0.5,
@@ -37,35 +41,48 @@ NB_PolyForm {
 			OSCFunc.new({ |msg|
 				if (synthGroup.isNil) {
 
-					synthGroup = ParGroup.new(Server.default);
+					synthGroup = Group.new(Server.default);
 
 					SynthDef(\nb_polyForm,{
 						arg out = 0, sendABus = 0, sendBBus = 0,
-						freq = 110, vel = 0.8, amp = 1.0, spread = 0, mix = 0, sendA = 0, sendB = 0,
-						saw_tune = 0, pulse_tune = 0, saw_shape = 1, pulse_width = 0.5,
-						cutoff_lpf = 1200, res_lpf = 0.1, env_lpf_depth = 0.2, moddepth = 0,
+						freq = 110, lastFreq = 110, glide = 0, pitchBend = 1, bendDepth = 0,
+						vel = 0.8, amp = 1.0, panDrift = 0, mix = 0, sendA = 0, sendB = 0,
+						sawTune = 0, pulseTune = 0, sawShape = 1, pulseWidth = 0.5,
+						cutoffLpf = 1200, rezLpf = 0.1, envDepthLpf = 0.2, modDepth = 0,
 						gate = 1, attack = 0.01, decay = 0.6, sustain = 0.5, release = 2.2,
-						mix_mod = 0, cut_lpf_mod = 0, saw_shape_mod = 0, pulse_width_mod = 0;
+						mixMod = 0, cutLpfMod = 0, sawShapeMod = 0, pulseWidthMod = 0, sendAMod = 0, sendBMod = 0;
 
-						var env = EnvGen.kr(Env.adsr(attack, decay, sustain, release), gate, doneAction: 2);
+						var env, freqSaw, freqPulse, oscSaw, oscPulse, snd, cutLin, cutoff, rqLpf;
+						
+						// envelope
+						env = EnvGen.kr(Env.adsr(attack, decay, sustain, release), gate, doneAction: 2);
 
-						var freq_saw = Lag.kr(freq * 2.pow(saw_tune / 12));
-						var freq_pulse = Lag.kr(freq * 2.pow(pulse_tune / 12));
-
-						var osc_saw = VarSaw.ar(freq_saw, 0.248, (saw_shape + (saw_shape_mod * moddepth)).clip(-1, 1));
-						var osc_pulse = Pulse.ar(freq_pulse, (pulse_width + (pulse_width_mod * moddepth)).clip(0.02, 0.98));
-						var osc_mix = XFade2.ar(osc_saw, osc_pulse, (mix + (mix_mod * moddepth)).clip(-1, 1)) * -9.dbamp;
-
-						var	cut_lin_lpf = cutoff_lpf.explin(20, 18000, 0, 1);
-						var	cut_lpf_val = cut_lin_lpf + (env * env_lpf_depth) + (cut_lpf_mod * moddepth);
-						var	cutoff = cut_lpf_val.linexp(0, 1, 20, 18000);
-						var	rq_lpf = res_lpf.linlin(0, 1, 0, 4);
-
-						var	osc_lpf = MoogFF.ar(osc_mix, cutoff, rq_lpf);
-
-						var snd = Pan2.ar(osc_lpf, Lag3.kr(spread * Rand(-0.7, 0.7), 0.2));
-
-						snd = snd * amp * env * vel;
+						// lag, rescale, clamp
+						sendA = Lag.kr(sendA + (sendAMod * modDepth)).clip(0, 1);
+						sendB = Lag.kr(sendB + (sendBMod * modDepth)).clip(0, 1);
+						sawShape = Lag.kr(sawShape + (sawShapeMod * modDepth)).clip(0.02, 0.98);
+						pulseWidth = Lag.kr(pulseWidth + (pulseWidthMod * modDepth)).clip(0.02, 0.98);
+						mix = Lag.kr(mix + (mixMod * modDepth)).clip(-1, 1);
+						
+						cutLin = cutoffLpf.explin(20, 18000, 0, 1) + (env * envDepthLpf) + (cutLpfMod * modDepth);
+						cutoff = cutLin.linexp(0, 1, 20, 18000);
+						rqLpf = rezLpf.linlin(0, 1, 0, 4);
+						
+						// pitch
+						freq = XLine.kr(lastFreq, freq, glide);
+						freq = (freq * (pitchBend * bendDepth).midiratio).clip(20, 20000);
+						freqSaw = Lag.kr(freq * sawTune.midiratio);
+						freqPulse = Lag.kr(freq * pulseTune.midiratio);
+						
+						// oscillator
+						oscSaw = VarSaw.ar(freqSaw, sawShape/2, sawShape);
+						oscPulse = Pulse.ar(freqPulse, pulseWidth);
+						snd = XFade2.ar(oscSaw, oscPulse, mix);
+						
+						// lpf and output stage
+						snd = MoogFF.ar(snd, cutoff, rqLpf);
+						snd = (snd * amp * env * vel).tanh * -9.dbamp;
+						snd = Pan2.ar(snd, panDrift * Rand(-0.7, 0.7));
 
 						Out.ar(out, snd);
 						Out.ar(sendABus, sendA * snd);
@@ -93,6 +110,7 @@ NB_PolyForm {
 					);
 					synthVoices[vox] = syn;
 					syn.onFree({ if(synthVoices[vox] === syn) {synthVoices[vox] = nil} });
+					synthParams[\lastFreq] = freq;
 				};
 			}, "/nb_polyform/note_on");
 
