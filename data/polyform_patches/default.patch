@@ -9,11 +9,11 @@ return {
    ["cutoff_lpf"]=1200.0,
    ["attack"]=0.001,
    ["env_lpf_depth"]=0.2,
-   ["spread"]=0,
+   ["pan_drift"]=0,
    ["decay"]=0.8,
    ["pulse_width"]=0.5,
    ["send_a"]=0,
    ["res_lpf"]=0.1,
-   ["amp"]=0.8,
+   ["level"]=0.8,
 },
 }
